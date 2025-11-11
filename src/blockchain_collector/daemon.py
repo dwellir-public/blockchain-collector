@@ -253,12 +253,12 @@ def main():
     t = threading.Thread(target=_worker, name="collector-worker", daemon=True)
     t.start()
 
-    port = _snapctl_get("service.port", 8080)
+    port = _snapctl_get("service.port", 18080)
     try:
         port = int(port)
     except Exception:
-        log.warning("Invalid service.port=%r, defaulting to 8080", port)
-        port = 8080
+        log.warning("Invalid service.port=%r, defaulting to 18080", port)
+        port = 18080
 
     addr = ("0.0.0.0", port)
     log.info("HTTP server starting on %s:%s", *addr)

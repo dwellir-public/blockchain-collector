@@ -84,7 +84,7 @@ These keys are read dynamically by the daemon; no rebuild needed.
 | `collector.validate`     | bool     | `true`  | Validate output JSON against the schema. |
 | `collector.schema_path`  | string   | *(none)*| Path to JSON Schema file inside the snap or on disk. |
 | `collector.interval`     | int sec  | `300`   | Background run interval in seconds (min 5). |
-| `service.port`           | int      | `8080`  | HTTP server listen port. |
+| `service.port`           | int      | `18080`  | HTTP server listen port. |
 | `log.level`              | string   | `INFO`  | One of: `CRITICAL`, `ERROR`, `WARNING`, `INFO`, `DEBUG`. |
 
 #### Examples
@@ -106,7 +106,7 @@ sudo snap set blockchain-collector collector.validate=false
 sudo snap set blockchain-collector collector.interval=60
 
 # Change HTTP port
-sudo snap set blockchain-collector service.port=18080
+sudo snap set blockchain-collector service.port=28080
 
 # Increase verbosity
 sudo snap set blockchain-collector log.level=DEBUG
@@ -158,7 +158,7 @@ exit
 
 ## HTTP API
 
-The daemon exposes a small HTTP API on `0.0.0.0:<service.port>` (default `:8080`).
+The daemon exposes a small HTTP API on `0.0.0.0:<service.port>` (default `:18080`).
 
 ### Endpoints
 
@@ -171,19 +171,19 @@ The daemon exposes a small HTTP API on `0.0.0.0:<service.port>` (default `:8080`
 
 ```bash
 # Health
-curl -s http://127.0.0.1:8080/healthz
+curl -s http://127.0.0.1:18080/healthz
 
 # Current metadata (pretty-print)
-curl -s http://127.0.0.1:8080/metadata | jq .
+curl -s http://127.0.0.1:18080/metadata | jq .
 
 # Trigger an on-demand collection
-curl -s -X POST http://127.0.0.1:8080/run | jq .
+curl -s -X POST http://127.0.0.1:18080/run | jq .
 
 # Inspect runtime env (debug)
-curl -s http://127.0.0.1:8080/env | jq .
+curl -s http://127.0.0.1:18080/env | jq .
 ```
 
-> If you changed the port via `service.port`, replace `8080` in the examples.
+> If you changed the port via `service.port`, replace `18080` in the examples.
 
 ---
 
