@@ -77,7 +77,7 @@ def _snapctl_get(key: str, default=None):
         log.warning("snapctl not found (%s). Using default for %s=%r", e, key, default)
         return default
     except subprocess.CalledProcessError as e:
-        log.warning("snapctl get %s failed: rc=%s stderr=%r", key, e.returncode, e.stderr)
+        log.warning("snapctl get %s failed (not set yet?): rc=%s stderr=%r", key, e.returncode, e.stderr)
         return default
     except Exception:
         log.exception("snapctl get %s crashed", key)
