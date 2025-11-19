@@ -15,6 +15,16 @@ plugs:
     interface: content
     content: executables
     target: $SNAP/usr/local
+# This connects the reth snap to the blockchain-collector snap  
+  reth-bins:
+    interface: content
+    content: executables
+    target: $SNAP/usr/local
+# This connects the polkadot snap to the blockchain-collector snap  
+  polkadot-bins:
+    interface: content
+    content: executables
+    target: $SNAP/usr/local
 
 
 # Our apps that uses snaps needs
@@ -26,7 +36,11 @@ apps:
     command: bin/python3 -m blockchain_collector.cli
     environment:
       PATH: "$SNAP/venv/bin:$PATH"
-    plugs: [network, dummychain-bins]
+    plugs: 
+      - network
+      - dummychain-bins
+      - polkadot-bins
+      - reth-bins
 
   metadata-daemon:
     command: bin/python3 -m blockchain_collector.daemon
@@ -34,7 +48,12 @@ apps:
     restart-condition: always
     environment:
       PATH: "$SNAP/venv/bin:$PATH"
-    plugs: [network, network-bind, dummychain-bins]
+    plugs: 
+      - network
+      - network-bind
+      - dummychain-bins
+      - polkadot-bins
+      - reth-bins
 
 
 parts:

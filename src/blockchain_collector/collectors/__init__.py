@@ -6,6 +6,8 @@ from .reth_op import OpRethCollector
 from .reth_bera import BeraRethCollector
 from .substrate import SubstrateCollector
 from .substrate_ajuna import AjunaCollector
+from .polkadot import PolkadotCollector
+from .dummychain import DummychainCollector
 
 # What this package exports
 __all__ = [
@@ -17,4 +19,5 @@ __all__ = [
     "SubstrateCollector",
     "AjunaCollector",
     "DummychainCollector",
+    "PolkadotCollector",
 ]
