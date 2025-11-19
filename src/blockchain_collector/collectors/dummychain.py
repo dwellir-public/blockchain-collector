@@ -79,17 +79,20 @@ class DummychainCollector(BaseCollector):
         # Populate workload
         client_version_cli = "unknown"
         try:
-            proc = subprocess.run(["/snap/bin/dummychain", "--version"], capture_output=True, text=True, check=True)
+            # Get the SNAP environment variable (set by snapd)
+            snap_path = os.environ.get('SNAP', '')
+            binary_path = os.path.join(snap_path, 'usr', 'local', 'bin', 'dummychain')
+            # Use the full path to the binary
+            proc = subprocess.run([binary_path, "--version"], capture_output=True, text=True, check=True)
             vline = (proc.stdout or "").strip().splitlines()
             client_version_cli = vline[0] if vline else None
+            # client_version_cli = "dummychain 0.0.0"
             if not client_version_cli:
                 messages.append("dummychain --version returned no output")
         except UnboundLocalError as e:
-            messages.append("dummychain binary not found (install dummychain snap)")
+            messages.append(f"Executable: {binary_path} not found (install dummychain snap)")
         except Exception as e:
-            messages.append(f"dummychain --version failed: {e!r}")
-        else:
-            messages.append("dummychain binary not found (install dummychain)")
+            messages.append(f"{binary_path} --version failed: {e!r}")
 
         if client_version_cli != "unknown":
             # Parse version string to a format "X.X.X"
@@ -97,7 +100,7 @@ class DummychainCollector(BaseCollector):
             workload["notes"] = "Snap installed."
         else:
             partial = CollectResult(blockchain=blockchain, workload=workload)
-            messages.append("dummychain binary not found (install dummychain snap)")
+            messages.append("Only partial data cound be retrieve.")
             raise CollectorPartialError(messages or ["Partial data only."], partial=partial)
 
         return CollectResult(blockchain=blockchain, workload=workload)
