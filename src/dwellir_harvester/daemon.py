@@ -13,7 +13,7 @@ from logging.handlers import RotatingFileHandler
 from http.server import HTTPServer, BaseHTTPRequestHandler
 
 SNAP = os.environ.get("SNAP", "")
-SNAP_COMMON = os.environ.get("SNAP_COMMON", "/var/snap/blockchain-collector/common")
+SNAP_COMMON = os.environ.get("SNAP_COMMON", "/var/snap/dwellir-harvester/common")
 METADATA_PATH = os.path.join(SNAP_COMMON, "metadata.json")
 LOG_PATH = os.path.join(SNAP_COMMON, "daemon.log")
 
@@ -106,7 +106,7 @@ def _dump_startup_env():
                 except Exception as e:
                     log.warning("stat(%s) failed: %s", path, e)
         # helpful "which"
-        for name in ("python3", "blockchain-collector", "snapctl"):
+        for name in ("python3", "dwellir-harvester", "snapctl"):
             log.info("which %s -> %s", name, shutil.which(name))
     except Exception:
         log.exception("Startup env dump failed")
@@ -116,12 +116,12 @@ def _find_collector_exe() -> str:
     # SNAP/venv/bin/...
     snap = os.environ.get("SNAP")
     if snap:
-        candidate = os.path.join(snap, "venv", "bin", "blockchain-collector")
+        candidate = os.path.join(snap, "venv", "bin", "dwellir-harvester")
         if os.path.isfile(candidate) and os.access(candidate, os.X_OK):
             return candidate
     # PATH
-    exe = shutil.which("blockchain-collector")
-    return exe or "blockchain-collector"
+    exe = shutil.which("dwellir-harvester")
+    return exe or "dwellir-harvester"
 
 def _summarize_error(stderr: str) -> str:
     """
@@ -133,7 +133,7 @@ def _summarize_error(stderr: str) -> str:
     lines = [ln.strip() for ln in stderr.splitlines() if ln.strip()]
     # Try to extract the last exception line
     for ln in reversed(lines):
-        # e.g. "blockchain_collector.core.CollectorFailedError: message"
+        # e.g. "dwellir_harvester.core.CollectorFailedError: message"
         if ":" in ln and "Traceback" not in ln:
             return ln
     # Fallback: first and last line

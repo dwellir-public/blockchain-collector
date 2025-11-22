@@ -4,7 +4,7 @@ import json
 from .core import run_collector, bundled_schema_path
 
 def build_parser() -> argparse.ArgumentParser:
-    p = argparse.ArgumentParser(prog="blockchain-collector", description="Collect blockchain node metadata into a JSON file.")
+    p = argparse.ArgumentParser(prog="dwellir-harvester", description="Collect node metadata into a JSON file.")
     sub = p.add_subparsers(dest="cmd", required=True)
     c = sub.add_parser("collect", help="Run a collector and emit JSON output.")
     c.add_argument("--schema", required=False, help="Path to JSON Schema file (defaults to bundled).")

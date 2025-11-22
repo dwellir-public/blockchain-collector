@@ -1,4 +1,4 @@
-# blockchain-collector
+# dwellir-harvester
 
 An extensible Python tool to collect metadata from **local blockchain nodes** and output a JSON file that conforms to a shared JSON Schema.
 
@@ -11,18 +11,18 @@ python3 -m venv .venv && . .venv/bin/activate
 pip install -e .
 
 # Run with the safe default "null" collector (no local node required)
-blockchain-collector collect   --schema schema/blockchain_node_metadata.schema.json   --collector null   --output out.json
+dwellir-harvester collect   --schema schema/blockchain_node_metadata.schema.json   --collector null   --output out.json
 ```
 
 Open `out.json` to see the collected data.
 
 ## Adding a new collector
 
-Create a new module under `src/blockchain_collector/collectors/` and implement a class
+Create a new module under `src/dwellir_harvester/collectors/` and implement a class
 that derives from `BaseCollector`. Example:
 
 ```python
-from blockchain_collector.core import BaseCollector, CollectResult
+from dwellir_harvester.core import BaseCollector, CollectResult
 
 class MyCollector(BaseCollector):
     NAME = "my_chain_client"
@@ -53,7 +53,7 @@ by `--collector my_chain_client`.
 - `bera-reth` — same logic as `reth`, only `workload.client_name` differs.
 - `substrate` — generic Substrate collector; queries `system_version`, `system_chain`, `chain_getBlockHash(0)`, and uses `system_name` for client_name when not overridden.
 - `ajuna` — Substrate wrapper that hardcodes `workload.client_name` to `ajuna`.
-- `dummychain` — Dummychain testing chain. (Must sudo snap connect blockchain-collector:dummychain-bins dummychain:bins)
+- `dummychain` — Dummychain testing chain. (Must sudo snap connect dwellir-harvester:dummychain-bins dummychain:bins)
  
 All Reth variants use the same environment variable for RPC:
 - `RETH_RPC_URL` (default: `http://127.0.0.1:8545`)
@@ -66,23 +66,23 @@ Examples:
 ```bash
 # Dummychain (snap) - connects via snap plugs
 sudo snap dummychain --edge
-sudo snap connect blockchain-collector:dummychain-bins dummychain:bins
-blockchain-collector collect --collector dummychain
+sudo snap connect dwellir-harvester:dummychain-bins dummychain:bins
+dwellir-harvester collect --collector dummychain
 
 # default reth
-blockchain-collector collect --collector reth
+dwellir-harvester collect --collector reth
  
 # Optimism reth
-blockchain-collector collect --collector op-reth
+dwellir-harvester collect --collector op-reth
  
 # Bera reth
-blockchain-collector collect --collector bera-reth
+dwellir-harvester collect --collector bera-reth
  
 # Generic substrate node (Polkadot/Kusama/Westend/etc.)
-blockchain-collector collect --collector substrate
+dwellir-harvester collect --collector substrate
 
 # Ajuna substrate node
-blockchain-collector collect --collector ajuna
+dwellir-harvester collect --collector ajuna
 ```
 
 
@@ -127,64 +127,64 @@ These keys are read dynamically by the daemon; no rebuild needed.
 
 ```bash
 # Use the safe default
-sudo snap set blockchain-collector collector.name=null
+sudo snap set dwellir-harvester collector.name=null
 
 # Switch to Reth later
-sudo snap set blockchain-collector collector.name=reth
+sudo snap set dwellir-harvester collector.name=reth
 
 # Point to a schema (path must be accessible to the snap)
-sudo snap set blockchain-collector collector.schema_path=$SNAP/schema/blockchain_node_metadata.schema.json
+sudo snap set dwellir-harvester collector.schema_path=$SNAP/schema/blockchain_node_metadata.schema.json
 
 # Turn off validation
-sudo snap set blockchain-collector collector.validate=false
+sudo snap set dwellir-harvester collector.validate=false
 
 # Run every minute
-sudo snap set blockchain-collector collector.interval=60
+sudo snap set dwellir-harvester collector.interval=60
 
 # Change HTTP port
-sudo snap set blockchain-collector service.port=28080
+sudo snap set dwellir-harvester service.port=28080
 
 # Increase verbosity
-sudo snap set blockchain-collector log.level=DEBUG
+sudo snap set dwellir-harvester log.level=DEBUG
 
 # Inspect current config
-snap get blockchain-collector
+snap get dwellir-harvester
 ```
 
 > After changing settings, the daemon will pick them up on the next cycle. To force now:  
-> `sudo snap restart blockchain-collector.daemon`
+> `sudo snap restart dwellir-harvester.daemon`
 
 ### Start / stop / status
 
 ```bash
 # Check services
-snap services blockchain-collector
+snap services dwellir-harvester
 
 # Start / stop / restart the daemon
-sudo snap start blockchain-collector.daemon
-sudo snap stop blockchain-collector.daemon
-sudo snap restart blockchain-collector.daemon
+sudo snap start dwellir-harvester.daemon
+sudo snap stop dwellir-harvester.daemon
+sudo snap restart dwellir-harvester.daemon
 
 # Systemd status (advanced)
-systemctl status snap.blockchain-collector.daemon.service
+systemctl status snap.dwellir-harvester.daemon.service
 ```
 
 ### Logs
 
 ```bash
 # Journald (live)
-snap logs blockchain-collector.daemon -f
+snap logs dwellir-harvester.daemon -f
 # or
-journalctl -u snap.blockchain-collector.daemon.service -o cat -f
+journalctl -u snap.dwellir-harvester.daemon.service -o cat -f
 
 # File log
-sudo tail -F /var/snap/blockchain-collector/common/daemon.log
+sudo tail -F /var/snap/dwellir-harvester/common/daemon.log
 ```
 
 ### Shell inside the snap environment
 
 ```bash
-sudo snap run --shell blockchain-collector.daemon
+sudo snap run --shell dwellir-harvester.daemon
 env | grep ^SNAP
 ls -al "$SNAP" "$SNAP_COMMON"
 exit

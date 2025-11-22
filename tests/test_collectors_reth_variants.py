@@ -2,7 +2,7 @@ from __future__ import annotations
 import json
 from unittest.mock import patch, Mock
 
-from blockchain_collector.core import load_collectors, run_collector, bundled_schema_path
+from dwellir_harvester.core import load_collectors, run_collector, bundled_schema_path
 
 
 def test_discovery_reth_variants_registered():
@@ -22,8 +22,8 @@ def _mock_jsonrpc_success(url: str, method: str, params=None, timeout=2.5):
     return None, f"unexpected method {method}"
 
 
-@patch("blockchain_collector.collectors._reth_common._find_reth_bin", return_value=None)
-@patch("blockchain_collector.collectors._reth_common._jsonrpc", side_effect=_mock_jsonrpc_success)
+@patch("dwellir_harvester.collectors._reth_common._find_reth_bin", return_value=None)
+@patch("dwellir_harvester.collectors._reth_common._jsonrpc", side_effect=_mock_jsonrpc_success)
 def test_run_collector_reth_success(mock_rpc: Mock, mock_bin: Mock):
     data = run_collector(
         collector_name="reth",
@@ -38,8 +38,8 @@ def test_run_collector_reth_success(mock_rpc: Mock, mock_bin: Mock):
     assert data["blockchain"]["blockchain_network_name"] == "mainnet"
 
 
-@patch("blockchain_collector.collectors._reth_common._find_reth_bin", return_value=None)
-@patch("blockchain_collector.collectors._reth_common._jsonrpc", side_effect=_mock_jsonrpc_success)
+@patch("dwellir_harvester.collectors._reth_common._find_reth_bin", return_value=None)
+@patch("dwellir_harvester.collectors._reth_common._jsonrpc", side_effect=_mock_jsonrpc_success)
 def test_run_collector_variants_success(mock_rpc: Mock, mock_bin: Mock):
     for name in ("op-reth", "bera-reth"):
         data = run_collector(

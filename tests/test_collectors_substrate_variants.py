@@ -1,7 +1,7 @@
 from __future__ import annotations
 from unittest.mock import patch
 
-from blockchain_collector.core import load_collectors, run_collector, bundled_schema_path
+from dwellir_harvester.core import load_collectors, run_collector, bundled_schema_path
 
 
 def test_discovery_substrate_variants_registered():
@@ -20,7 +20,7 @@ def _mock_jsonrpc(url: str, method: str, params=None, timeout: float = 2.5):
     return None, f"unexpected method {method}"
 
 
-@patch("blockchain_collector.collectors._substrate_common._jsonrpc", side_effect=_mock_jsonrpc)
+@patch("dwellir_harvester.collectors._substrate_common._jsonrpc", side_effect=_mock_jsonrpc)
 def test_run_substrate_generic_success(mock_rpc):
     data = run_collector(
         collector_name="substrate",
@@ -43,7 +43,7 @@ def _mock_jsonrpc_ajuna(url: str, method: str, params=None, timeout: float = 2.5
     return None, f"unexpected method {method}"
 
 
-@patch("blockchain_collector.collectors._substrate_common._jsonrpc", side_effect=_mock_jsonrpc_ajuna)
+@patch("dwellir_harvester.collectors._substrate_common._jsonrpc", side_effect=_mock_jsonrpc_ajuna)
 def test_run_substrate_ajuna_success(mock_rpc):
     data = run_collector(
         collector_name="ajuna",

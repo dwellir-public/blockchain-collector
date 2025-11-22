@@ -3,10 +3,10 @@ requires = ["setuptools>=65", "wheel"]
 build-backend = "setuptools.build_meta"
 
 [project]
-name = "blockchain-collector"
+name = "dwellir-harvester"
 version = "0.1.0"
-description = "Extensible collectors that gather blockchain node metadata into a JSON file following a shared schema."
-authors = [{ name = "Your Team", email = "ops@example.com" }]
+description = "Collects data from running Dwellir server nodes."
+authors = [{ name = "Dwellir OPS", email = "ops@dwellir.com" }]
 readme = "README.md"
 requires-python = ">=3.9"
 dependencies = ["jsonschema>=4.18"]
@@ -25,11 +25,11 @@ classifiers = [
 ]
 
 [project.scripts]
-blockchain-collector = "blockchain_collector.cli:main"
-collector-metadata-daemon = "blockchain_collector.daemon:main"
+dwellir-harvester = "dwellir_harvester.cli:main"
+dwellir-harvester-daemon = "dwellir_harvester.daemon:main"
 
 [tool.setuptools]
 package-dir = {"" = "src"}
 
 [tool.setuptools.package-data]
-blockchain_collector = ["data/*.json"]
+dwellir_harvester = ["data/*.json"]
