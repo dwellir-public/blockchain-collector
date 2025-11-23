@@ -31,6 +31,12 @@ class CollectorDaemon:
         self.running = False
         self.worker_thread: Optional[threading.Thread] = None
         self.httpd: Optional[HTTPServer] = None
+        self.output_file = config.get('output_file', '/var/lib/dwellir-harvester/harvested-data.json')
+        
+        # Ensure output directory exists
+        if self.output_file:
+            output_dir = os.path.dirname(self.output_file)
+            os.makedirs(output_dir, exist_ok=True)
 
     def run_collectors(self) -> Dict[str, Any]:
         """Run all collectors and return the results."""
@@ -50,6 +56,15 @@ class CollectorDaemon:
             # Update the latest results
             with self.lock:
                 self.latest_results = result
+                
+                # Write results to file if output_file is set
+                if self.output_file:
+                    try:
+                        with open(self.output_file, 'w') as f:
+                            json.dump(result, f, indent=2)
+                        log.debug(f"Wrote collected data to {self.output_file}")
+                    except Exception as e:
+                        log.error(f"Failed to write to output file {self.output_file}: {e}")
 
             return result
 
@@ -161,50 +176,23 @@ class CollectorDaemon:
 
 def parse_args():
     """Parse command line arguments."""
-    parser = argparse.ArgumentParser(
-        description='Dwellir Harvester Daemon',
-        formatter_class=argparse.ArgumentDefaultsHelpFormatter
-    )
-    
-    parser.add_argument(
-        '--collectors',
-        nargs='+',
-        default=['host'],
-        help='List of collectors to run'
-    )
-    parser.add_argument(
-        '--host',
-        default='0.0.0.0',
-        help='Host to bind the HTTP server to'
-    )
-    parser.add_argument(
-        '--port',
-        type=int,
-        default=18080,
-        help='Port to run the HTTP server on'
-    )
-    parser.add_argument(
-        '--interval',
-        type=int,
-        default=300,
-        help='Collection interval in seconds'
-    )
-    parser.add_argument(
-        '--schema',
-        help='Path to JSON schema file (defaults to bundled schema)'
-    )
-    parser.add_argument(
-        '--no-validate',
-        action='store_false',
-        dest='validate',
-        help='Disable schema validation'
-    )
-    parser.add_argument(
-        '--log-level',
-        default='INFO',
-        choices=['DEBUG', 'INFO', 'WARNING', 'ERROR', 'CRITICAL'],
-        help='Logging level'
-    )
+    parser = argparse.ArgumentParser(description='Dwellir Harvester Daemon')
+    parser.add_argument('--collectors', nargs='+', default=['host'],
+                      help='List of collectors to run (default: host)')
+    parser.add_argument('--host', default='0.0.0.0',
+                      help='Host to bind the HTTP server to (default: 0.0.0.0)')
+    parser.add_argument('--port', type=int, default=18080,
+                      help='Port to run the HTTP server on (default: 18080)')
+    parser.add_argument('--interval', type=int, default=300,
+                      help='Collection interval in seconds (default: 300)')
+    parser.add_argument('--output', default='/var/lib/dwellir-harvester/harvested-data.json',
+                      help='Path to output file for collected data (default: /var/lib/dwellir-harvester/harvested-data.json)')
+    parser.add_argument('--schema', help='Path to JSON schema file (defaults to bundled schema)')
+    parser.add_argument('--no-validate', action='store_false', dest='validate',
+                      help='Disable schema validation')
+    parser.add_argument('--log-level', default='INFO',
+                      choices=['DEBUG', 'INFO', 'WARNING', 'ERROR', 'CRITICAL'],
+                      help='Logging level (default: INFO)')
     
     return parser.parse_args()
 
@@ -221,8 +209,8 @@ def main():
         'host': args.host,
         'port': args.port,
         'interval': args.interval,
-        'schema_path': args.schema,
-        'validate': args.validate
+        'validate': args.validate,
+        'output_file': args.output,
     })
     
     try:
