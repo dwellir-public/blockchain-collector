@@ -220,6 +220,11 @@ python3 -m build  # creates dist/*.tar.gz and dist/*.whl
 python3 -m twine upload -r testpypi dist/*
 
 # Install from testpypi
+python3 -m venv .venv
+source .venv/bin/activate
+# Pull in deps from real, this is needed only on testpypi 
+pip3 install jsonschema>=4.25.1 psutil>=7.1.3 requests>=2.32.5
+# Install from testpypi
 pip3 install --index-url https://test.pypi.org/simple/ --no-deps dwellir-harvester
 
 # then to PyPI

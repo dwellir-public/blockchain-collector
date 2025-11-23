@@ -4,12 +4,11 @@ import importlib
 import json
 import platform
 import socket
-import sys
 import time
 import pkgutil
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
-from typing import Dict, List, Optional, Any, TypedDict, Union, Type, ClassVar
+from typing import Dict, List, Optional, Any, TypedDict, Union
 
 # Try to import optional dependencies
 try:

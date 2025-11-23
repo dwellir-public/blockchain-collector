@@ -6,14 +6,11 @@ import time
 import logging
 import threading
 import argparse
-import tempfile
-from pathlib import Path
 from http.server import HTTPServer, BaseHTTPRequestHandler
-from typing import Dict, Any, Optional, List
+from typing import Dict, Any, Optional
 
 # Import core functionality from the package
-from dwellir_harvester.core import collect_all, bundled_schema_path, load_collectors
-from dwellir_harvester.cli import build_parser
+from dwellir_harvester.core import collect_all, bundled_schema_path
 
 # Configure logging
 logging.basicConfig(
