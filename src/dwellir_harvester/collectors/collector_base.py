@@ -1,6 +1,8 @@
 """Base classes for collectors."""
 import importlib
+import traceback
 import sys
+import logging
 from abc import ABC, abstractmethod
 from datetime import datetime, timezone
 from typing import Any, Dict, List, Optional, Tuple, Type, TypeVar, Union, Generic
@@ -202,7 +204,7 @@ class BlockchainCollector(CollectorBase):
             data: The blockchain data to validate.
             
         Raises:
-            CollectorError: If any required fields are missing or have incorrect types.
+            CollectorError: If any required fields are missing, None, or have incorrect types.
         """
         if "blockchain" not in data:
             raise CollectorError("Missing 'blockchain' key in collector data")
@@ -210,13 +212,23 @@ class BlockchainCollector(CollectorBase):
         blockchain_data = data["blockchain"]
         missing_fields = []
         type_errors = []
+        none_fields = []
         
         for field, expected_types in self.REQUIRED_FIELDS.items():
             if field not in blockchain_data:
+                logging.debug(f"Missing required field: {field} (expected types: {[t.__name__ for t in expected_types]})")
                 missing_fields.append(field)
                 continue
                 
             value = blockchain_data[field]
+            
+            # Check for None values unless None is explicitly allowed
+            if value is None and None not in expected_types:
+                logging.debug(f"Required field {field} is None (expected types: {[t.__name__ for t in expected_types]})")
+                none_fields.append(field)
+                continue
+                
+            # Only do type checking for non-None values
             if value is not None and not any(isinstance(value, t) for t in expected_types):
                 expected_type_names = [t.__name__ for t in expected_types if t is not type(None)]
                 if None in expected_types:
@@ -229,33 +241,44 @@ class BlockchainCollector(CollectorBase):
         errors = []
         if missing_fields:
             errors.append(f"Missing required fields: {', '.join(missing_fields)}")
+        if none_fields:
+            errors.append(f"Required fields cannot be None: {', '.join(none_fields)}")
         if type_errors:
             errors.extend(type_errors)
             
         if errors:
             raise CollectorError("; ".join(errors))
     
+    def _prepare_blockchain_data(self) -> Dict[str, Any]:
+        """Prepare the blockchain data to be collected.
+        
+        This method should be overridden by subclasses to provide the actual data.
+        
+        Returns:
+            Dict containing the blockchain data with all required fields.
+        """
+        return {
+            # These should be overridden by subclasses
+            "blockchain_ecosystem": None,
+            "blockchain_network_name": None,
+            "chain_id": None,
+            "client_name": None,
+            "client_version": None
+        }
+    
     def collect(self) -> Dict[str, Any]:
         """Collect blockchain data.
         
         Returns:
-            Dict with 'metadata' and 'data' keys. The 'data' dict must contain
-            'blockchain' and 'client' keys with appropriate data.
-            
-        Note:
-            Subclasses should implement their own collection logic and call
-            super().collect() to include the metadata.
+            Dict with 'metadata' and 'data' keys. The 'data' dict will contain
+            a 'blockchain' key with the data from _prepare_blockchain_data().
         """
-        # This is the base implementation that subclasses should extend
+        # Get the blockchain data from the subclass implementation
+        blockchain_data = self._prepare_blockchain_data()
+        
+        # Prepare the data structure with the blockchain data
         data = {
-            "blockchain": {
-                # These should be overridden by subclasses
-                "blockchain_ecosystem": None,
-                "blockchain_network_name": None,
-                "chain_id": None,
-                "client_name": None,
-                "client_version": None
-            }
+            "blockchain": blockchain_data
         }
         
         # Validate the collected data

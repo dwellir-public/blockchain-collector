@@ -2,13 +2,12 @@ from typing import Dict, Any, Optional, List, Tuple
 import subprocess
 from ..journalctl import get_last_journal_message
 from ..systemctl_status import get_essential_service_properties
-from ..rpc_common import jsonrpc_call
-from .collector_base import BlockchainCollector
+from .collector_base import BlockchainCollector, CollectResult
 
 class DummychainCollector(BlockchainCollector):
     """Collector for Dummychain nodes."""
-    
-    NAME = "dummychain"
+
+    NAME = "dummychain" 
     VERSION = "0.1.0"
     
     def __init__(self, rpc_url: Optional[str] = None):
@@ -31,23 +30,12 @@ class DummychainCollector(BlockchainCollector):
             DummychainCollector: A new instance of the DummychainCollector.
         """
         return cls(**kwargs)
-    
-    def _jsonrpc(self, method: str, params: list = None, **kwargs) -> tuple[Any, Optional[str]]:
-        """Make a JSON-RPC call to the node.
-        
-        Args:
-            method: The JSON-RPC method to call
-            params: Optional list of parameters for the method
-            **kwargs: Additional arguments to pass to the RPC call
-            
-        Returns:
-            A tuple of (result, error) where only one will be non-None
-        """
-        return jsonrpc_call(self.rpc_url, method, params, **kwargs)
+
     
     # In dummychain.py, update the _get_systemd_status method:
     def _get_systemd_status(self) -> Dict[str, Any]:
         """Get systemd status for the dummychain service.
+        Merges in some data from the journal as well.
         
         Returns:
             Dict containing service status, journal messages, and systemd properties.
@@ -136,35 +124,36 @@ class DummychainCollector(BlockchainCollector):
         Returns:
             Dict containing the collected data.
         """
-        # Start with base blockchain data
-        result = super().collect()
-        
-        # Update with DummyChain specific data
-        result["data"]["blockchain"].update({
-            "blockchain_ecosystem": "dummychain",
-            "blockchain_network_name": "dummychain",
-            "chain_id": None,
-            "client_name": "dummychain",
-            "client_version": None
-        })
-        
-        # Get client version
+        # First collect all the data we need
         version, messages = self._get_client_version()
-        result["data"]["blockchain"]["client_version"] = version
-        if messages:
-            result["data"]["blockchain"]["client_errors"] = messages
         
         # Get systemd status
         try:
             systemd_status = self._get_systemd_status()
-            result["data"]["blockchain"]["systemd_status"] = systemd_status
         except Exception as e:
-            result["data"]["blockchain"]["systemd_status"] = {
+            systemd_status = {
                 "error": str(e),
                 "type": type(e).__name__
             }
         
+        # Create the result with all data
+        result = CollectResult.create(
+            collector_name=self.NAME,
+            collector_version=self.VERSION,
+            data={
+                "blockchain": {
+                    "blockchain_ecosystem": "dummychain",
+                    "blockchain_network_name": "dummychain",
+                    "chain_id": "dummychain-1",  # Provide a default chain_id
+                    "client_name": "dummychain-node",
+                    "client_version": version or "1.0.0",  # Fallback to default if version is None
+                    "systemd_status": systemd_status,
+                    **({"client_errors": messages} if messages else {})
+                }
+            }
+        )
+        
         # Validate the final data structure
-        self._validate_blockchain_data(result["data"])
+        self._validate_blockchain_data(result.data)
         
         return result

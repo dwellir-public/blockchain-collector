@@ -224,7 +224,7 @@ def collect_all(collector_names: List[str], schema_path: str, validate: bool = T
         Dict containing the collected data in the format:
         {
             "harvester": { ... },
-            "system": { ... },
+            "host": { ... },
             "collectors": {
                 "collector_name": {
                     "meta": { ... },
