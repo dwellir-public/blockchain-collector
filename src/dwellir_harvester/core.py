@@ -5,10 +5,13 @@ import json
 import platform
 import socket
 import time
+import sys
 import pkgutil
-from dataclasses import dataclass, field
 from datetime import datetime, timezone
 from typing import Dict, List, Optional, Any, TypedDict, Union
+
+# Import types and exceptions
+from .types import CollectResult, CollectorMetadata, CollectorError, CollectorFailedError, CollectorPartialError
 
 # Try to import optional dependencies
 try:
@@ -21,15 +24,6 @@ try:
     HAS_DISTRO = True
 except ImportError:
     HAS_DISTRO = False
-
-class CollectorFailedError(Exception):
-    pass
-
-class CollectorPartialError(Exception):
-    def __init__(self, messages: List[str], partial: Optional["CollectResult"]=None):
-        self.messages = messages
-        self.partial = partial
-        super().__init__("; ".join(messages))
 
 
 class CollectorData(TypedDict, total=False):
@@ -44,58 +38,6 @@ class BlockchainData(CollectorData, total=False):
     client_name: str
     client_version: str
     systemd_status: Optional[Dict[str, Any]]
-
-@dataclass
-class CollectorMetadata:
-    """Metadata about a collector run."""
-    collector_name: str
-    collector_version: str
-    collection_time: str = field(default_factory=lambda: datetime.now(timezone.utc).isoformat())
-    status: str = "success"
-    errors: List[str] = field(default_factory=list)
-
-    def to_dict(self) -> Dict[str, Any]:
-        """Convert metadata to a dictionary."""
-        return {
-            "collector_name": self.collector_name,
-            "collector_version": self.collector_version,
-            "collection_time": self.collection_time,
-            "status": self.status,
-            "errors": self.errors
-        }
-
-@dataclass
-class CollectResult:
-    """Result of a collector run."""
-    metadata: CollectorMetadata
-    data: Dict[str, Any] = field(default_factory=dict)
-
-    @classmethod
-    def create(
-        cls,
-        collector_name: str,
-        collector_version: str,
-        data: Optional[Dict[str, Any]] = None,
-        errors: Optional[List[str]] = None
-    ) -> 'CollectResult':
-        """Create a new CollectResult with proper metadata."""
-        status = "failed" if (errors and len(errors) > 0) else "success"
-        metadata = CollectorMetadata(
-            collector_name=collector_name,
-            collector_version=collector_version,
-            status=status,
-            errors=errors or []
-        )
-        return cls(metadata=metadata, data=data or {})
-
-    def to_dict(self) -> Dict[str, Any]:
-        """Convert the CollectResult to a dictionary."""
-        return {
-            "metadata": self.metadata.to_dict(),
-            "data": self.data
-        }
-
-# Base collector class has been moved to collectors.collector_base.CollectorBase
 
 def now_iso_tz() -> str:
     return datetime.now(timezone.utc).astimezone().isoformat(timespec="seconds")
@@ -170,12 +112,13 @@ def collect_system_info() -> Dict[str, Any]:
     
     return system_info
 
-def run_collector(collector_name: str, schema_path: str = None) -> Dict[str, Any]:
+def run_collector(collector_name: str, schema_path: str = None, debug: bool = False) -> Dict[str, Any]:
     """Run a single collector and return its result.
     
     Args:
         collector_name: Name of the collector to run
         schema_path: Optional path to the JSON schema file for validation
+        debug: If True, include detailed debug information in the output
         
     Returns:
         Dict containing the collector's result with 'meta' and 'data' keys
@@ -183,93 +126,91 @@ def run_collector(collector_name: str, schema_path: str = None) -> Dict[str, Any
     try:
         collectors = load_collectors()
         if collector_name not in collectors:
-            raise CollectorFailedError(f"Unknown collector: {collector_name}")
+            error_msg = f"Unknown collector: {collector_name}"
+            if debug:
+                error_msg += f"\nAvailable collectors: {', '.join(collectors.keys())}"
+            raise CollectorFailedError(error_msg)
 
         CollectorCls = collectors[collector_name]
-        collector = CollectorCls.create()
         
-        # Run the collector
-        result = collector.collect()
+        try:
+            collector = CollectorCls.create()
+        except Exception as e:
+            if debug:
+                import traceback
+                raise CollectorFailedError(
+                    f"Failed to create collector {collector_name}: {str(e)}\n"
+                    f"Traceback:\n{traceback.format_exc()}"
+                ) from e
+            raise CollectorFailedError(f"Failed to create collector {collector_name}: {str(e)}")
         
-        # If the collector didn't return a CollectResult, wrap it
-        if not isinstance(result, CollectResult):
-            result = CollectResult.create(
-                collector_name=collector_name,
-                collector_version=getattr(CollectorCls, "VERSION", "0.0.0"),
-                data=result
-            )
+        try:
+            # Run the collector with debug flag
+            result = collector.run(debug=debug)
+        except Exception as e:
+            if debug:
+                import traceback
+                raise CollectorFailedError(
+                    f"Error in collector {collector_name}: {str(e)}\n"
+                    f"Traceback:\n{traceback.format_exc()}"
+                ) from e
+            raise
         
-        # Convert to dict
-        result_dict = result.to_dict()
-        
-        # For the host collector, just return the data as is
+        # For the host collector, ensure it has the correct structure
         if collector_name == "host":
             return {
                 "meta": {
                     "collector_type": "host",
                     "collector_name": collector_name,
                     "collector_version": getattr(CollectorCls, "VERSION", "0.0.0"),
-                    "collection_time": now_iso_tz()
+                    "collection_time": now_iso_tz(),
+                    "status": result.get("meta", {}).get("status", "success"),
+                    "errors": result.get("meta", {}).get("errors", [])
                 },
-                "data": result_dict.get("data", {})
+                "data": result.get("data", {})
             }
         
-        # For other collectors, ensure they have the correct structure
-        if "meta" not in result_dict or "data" not in result_dict:
-            result_dict = {
-                "meta": {
-                    "collector_type": result_dict.get("metadata", {}).get("collector_type", "generic"),
-                    "collector_name": result_dict.get("metadata", {}).get("collector_name", collector_name),
-                    "collector_version": result_dict.get("metadata", {}).get("collector_version", getattr(CollectorCls, "VERSION", "0.0.0")),
-                    "collection_time": result_dict.get("metadata", {}).get("collection_time", now_iso_tz())
-                },
-                "data": result_dict.get("data", {})
+        # Ensure the result has the expected structure
+        if not isinstance(result, dict):
+            result = {"data": result}
+            
+        if "meta" not in result:
+            result["meta"] = {
+                "collector_type": getattr(collector, "COLLECTOR_TYPE", "generic"),
+                "collector_name": getattr(collector, "NAME", collector_name),
+                "collector_version": getattr(collector, "VERSION", "0.0.0"),
+                "collection_time": now_iso_tz()
             }
             
-        # Add message if present
-        if "message" in result_dict:
-            result_dict["message"] = result_dict["message"]
-            
-        return result_dict
+        # Add debug info if enabled
+        if debug and "debug" not in result.get("meta", {}):
+            import sys
+            result["meta"]["debug"] = {
+                "python_version": sys.version,
+                "platform": sys.platform,
+                "executable": sys.executable,
+                "collector_module": CollectorCls.__module__
+            }
         
+        return result
+        
+    except CollectorFailedError:
+        raise  # Re-raise CollectorFailedError as-is
     except Exception as e:
-        error_msg = str(e)
-        print(f"Error in collector {collector_name}: {error_msg}", file=sys.stderr)
-        
-        # Create a failed result
-        return {
-            "meta": {
-                "collector_type": "generic",
-                "collector_name": collector_name,
-                "collector_version": getattr(CollectorCls, "VERSION", "0.0.0"),
-                "collection_time": now_iso_tz(),
-                "status": "failed",
-                "errors": [error_msg]
-            },
-            "data": {}
-        }
-        
-    except CollectorPartialError as e:
-        # Handle partial results
-        result = e.partial or {}
-        return {
-            "meta": {
-                "collector_type": result.get("metadata", {}).get("collector_type", "generic"),
-                "collector_name": result.get("metadata", {}).get("collector_name", collector_name),
-                "collector_version": result.get("metadata", {}).get("collector_version", getattr(CollectorCls, "VERSION", "0.0.0")),
-                "collection_time": result.get("metadata", {}).get("collection_time", now_iso_tz()),
-                "status": "partial",
-                "errors": e.messages
-            },
-            "data": result.get("data", {})
-        }
+        error_msg = f"Unexpected error in collector {collector_name}: {str(e)}"
+        if debug:
+            import traceback
+            error_msg += f"\nTraceback:\n{traceback.format_exc()}"
+        raise CollectorFailedError(error_msg) from e
 
-def collect_all(collector_names: List[str], schema_path: str, validate: bool = True) -> Dict[str, Any]:
+def collect_all(collector_names: List[str], schema_path: str, validate: bool = True, debug: bool = False) -> Dict[str, Any]:
     """Run multiple collectors and merge their results.
     
     Args:
         collector_names: List of collector names to run
         schema_path: Path to the JSON schema file for validation
+        validate: Whether to validate the output against the schema
+        debug: If True, include detailed debug information in the output
         
     Returns:
         Dict containing the collected data in the format:
@@ -302,7 +243,7 @@ def collect_all(collector_names: List[str], schema_path: str, validate: bool = T
     # Run all collectors, including host
     for name in collector_names:
         try:
-            collector_result = run_collector(name, schema_path)
+            collector_result = run_collector(name, schema_path, debug=debug)
             
             # Handle the collector result
             collector_data = {
@@ -319,27 +260,67 @@ def collect_all(collector_names: List[str], schema_path: str, validate: bool = T
             if "message" in collector_result:
                 collector_data["message"] = collector_result["message"]
                 
-            # Special case: host collector goes to the top level
+            # Special handling for host collector
             if name == "host":
                 result["host"] = collector_data["data"]
             else:
                 result["collectors"][name] = collector_data
-                    
-        except Exception as e:
-            print(f"Warning: Failed to run collector {name}: {e}", file=sys.stderr)
-            result["collectors"][name] = {
-                "meta": {
-                    "collector_type": "generic",
-                    "collector_name": name,
-                    "collector_version": "0.0.0",
-                    "collection_time": collection_time
-                },
-                "data": {},
-                "message": f"Collector failed: {str(e)}"
+                
+        except CollectorFailedError as e:
+            if debug:
+                import traceback
+                result["collectors"][name] = {
+                    "meta": {
+                        "collector_name": name,
+                        "status": "failed",
+                        "collection_time": now_iso_tz(),
+                        "errors": [str(e)],
+                        "debug": {
+                            "traceback": traceback.format_exc()
+                        }
+                    },
+                    "data": {}
+                }
+            else:
+                result["collectors"][name] = {
+                    "meta": {
+                        "collector_name": name,
+                        "status": "failed",
+                        "collection_time": now_iso_tz(),
+                        "errors": [str(e)]
+                    },
+                    "data": {}
+                }
+    
+    # Add system information
+    try:
+        result["system"] = collect_system_info()
+    except Exception as e:
+        if debug:
+            import traceback
+            result["system"] = {
+                "error": f"Failed to collect system info: {str(e)}",
+                "debug": {
+                    "traceback": traceback.format_exc()
+                }
+            }
+        else:
+            result["system"] = {
+                "error": f"Failed to collect system info: {str(e)}"
             }
     
-    # Validate the final merged result if requested
-    if validate and jsonschema:
-        validate_output(result, schema_path)
+    # Validate the output if requested
+    if validate and schema_path:
+        try:
+            validate_output(result, schema_path)
+        except Exception as e:
+            if debug:
+                import traceback
+                result["harvester"]["validation_error"] = {
+                    "error": str(e),
+                    "traceback": traceback.format_exc()
+                }
+            else:
+                result["harvester"]["validation_error"] = str(e)
     
     return result

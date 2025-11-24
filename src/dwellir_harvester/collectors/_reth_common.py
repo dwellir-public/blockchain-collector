@@ -1,8 +1,16 @@
 from __future__ import annotations
-import os, json, subprocess, socket, shutil
-from typing import Dict, Optional, List, Tuple
-from urllib import request, error as urlerror
-from ..core import CollectResult, CollectorPartialError, CollectorFailedError
+import os
+import subprocess
+import shutil
+from typing import Dict, Optional, List
+
+from ..types import CollectResult, CollectorPartialError, CollectorFailedError
+from ..rpc_evm import (
+    rpc_get_client_version,
+    rpc_get_chain_id,
+    rpc_get_net_version,
+    map_network_name as _map_network_name
+)
 
 # Version for all reth-derived collectors
 RETH_COLLECTOR_VERSION = "0.1.2"
@@ -10,57 +18,6 @@ RETH_COLLECTOR_VERSION = "0.1.2"
 # RPC configuration
 RPC_ENV = "RETH_RPC_URL"
 DEFAULT_RPC = "http://127.0.0.1:8545"
-
-
-def _jsonrpc(url: str, method: str, params=None, timeout=2.5) -> Tuple[Optional[object], Optional[str]]:
-    if params is None:
-        params = []
-    payload = json.dumps({"jsonrpc": "2.0", "id": 1, "method": method, "params": params}).encode()
-    req = request.Request(url, data=payload, headers={"Content-Type": "application/json"})
-    try:
-        with request.urlopen(req, timeout=timeout) as resp:
-            data = json.loads(resp.read().decode())
-            if "error" in data:
-                return None, f"rpc {method} error: {data['error']}"
-            return data.get("result"), None
-    except socket.timeout:
-        return None, f"rpc {method} timeout after {timeout}s (url={url})"
-    except urlerror.URLError as e:
-        reason = getattr(e, "reason", e)
-        return None, f"rpc {method} connection error (url={url}): {reason}"
-    except Exception as e:
-        return None, f"rpc {method} unexpected error (url={url}): {e}"
-
-
-def _get_client_version_from_rpc(url: str):
-    return _jsonrpc(url, "web3_clientVersion")
-
-
-def _get_chain_id(url: str):
-    res, err = _jsonrpc(url, "eth_chainId")
-    if res is None:
-        return None, err
-    try:
-        return int(res, 16), None
-    except Exception as e:
-        return None, f"rpc eth_chainId parse error for {res!r}: {e}"
-
-
-def _get_net_version(url: str):
-    return _jsonrpc(url, "net_version")
-
-
-def _map_network_name(chain_id: Optional[int], net_version: Optional[str]) -> str:
-    mapping = {1: "mainnet", 11155111: "sepolia", 17000: "holesky", 5: "goerli"}
-    if chain_id in mapping:
-        return mapping[chain_id]
-    if net_version:
-        try:
-            cid = int(net_version)
-            return mapping.get(cid, f"network-{cid}")
-        except Exception:
-            return str(net_version)
-    return "unknown"
 
 
 def _find_reth_bin() -> Optional[str]:
@@ -97,15 +54,18 @@ def collect_reth(client_name: str, rpc_env: str = RPC_ENV, default_rpc: str = DE
     # RPC info (with detailed error messages)
     rpc_url = os.environ.get(rpc_env, default_rpc)
 
-    client_version_rpc, err_cv = _get_client_version_from_rpc(rpc_url)
+    # Get client version from RPC
+    client_version_rpc, err_cv = rpc_get_client_version(rpc_url)
     if client_version_rpc is None:
         messages.append(err_cv or "RPC web3_clientVersion unavailable")
 
-    chain_id, err_cid = _get_chain_id(rpc_url)
+    # Get chain ID from RPC
+    chain_id, err_cid = rpc_get_chain_id(rpc_url)
     if chain_id is None:
         messages.append(err_cid or "RPC eth_chainId unavailable")
 
-    net_version, err_net = _get_net_version(rpc_url)
+    # Get network version from RPC
+    net_version, err_net = rpc_get_net_version(rpc_url)
     if net_version is None:
         messages.append(err_net or "RPC net_version unavailable")
 

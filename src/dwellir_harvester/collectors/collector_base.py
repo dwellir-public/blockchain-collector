@@ -1,14 +1,15 @@
 """Base classes for collectors."""
+import importlib
+import sys
 from abc import ABC, abstractmethod
 from datetime import datetime, timezone
-from typing import Any, Dict, Optional, Type, TypeVar, Generic, List
+from typing import Any, Dict, List, Optional, Tuple, Type, TypeVar, Union, Generic
+
+from ..types import CollectResult, CollectorMetadata, CollectorError, CollectorFailedError, CollectorPartialError
 
 T = TypeVar('T')
 
 
-class CollectorError(Exception):
-    """Base exception for collector errors."""
-    pass
 
 
 class CollectorBase(ABC):
@@ -25,14 +26,13 @@ class CollectorBase(ABC):
         if not hasattr(self, 'NAME') or not self.NAME:
             raise NotImplementedError("Subclasses must define NAME")
     
-    def _get_metadata(self) -> Dict[str, Any]:
+    def _get_metadata(self) -> CollectorMetadata:
         """Get the standard metadata for this collector."""
-        return {
-            "collector_type": self.COLLECTOR_TYPE,
-            "collector_name": self.NAME,
-            "collector_version": self.VERSION,
-            "collection_time": datetime.now(timezone.utc).isoformat()
-        }
+        return CollectorMetadata(
+            collector_name=self.NAME,
+            collector_version=self.VERSION,
+            collector_type=self.COLLECTOR_TYPE
+        )
     
     @abstractmethod
     def collect(self) -> Dict[str, Any]:
@@ -42,6 +42,103 @@ class CollectorBase(ABC):
             Dict containing the collected data.
         """
         return {}
+        
+    def run(self, debug: bool = False) -> Dict[str, Any]:
+        """Run the collector and return its result with metadata.
+        
+        Args:
+            debug: If True, include detailed error information in the output.
+        
+        Returns:
+            Dict containing 'meta' and 'data' keys with the collected data.
+        """
+        try:
+            # Run the collector
+            result = self.collect()
+            
+            # If the collector didn't return a CollectResult, wrap it
+            if not isinstance(result, CollectResult):
+                result = CollectResult.create(
+                    collector_name=self.NAME,
+                    collector_version=self.VERSION,
+                    data=result
+                )
+            
+            # Convert to dict
+            result_dict = result.to_dict()
+            
+            # Ensure the result has the correct structure
+            if "meta" not in result_dict or "data" not in result_dict:
+                result_dict = {
+                    "meta": {
+                        "collector_type": result_dict.get("metadata", {}).get("collector_type", self.COLLECTOR_TYPE),
+                        "collector_name": result_dict.get("metadata", {}).get("collector_name", self.NAME),
+                        "collector_version": result_dict.get("metadata", {}).get("collector_version", self.VERSION),
+                        "collection_time": result_dict.get("metadata", {}).get("collection_time", 
+                            datetime.now(timezone.utc).isoformat())
+                    },
+                    "data": result_dict.get("data", {})
+                }
+                
+            # Add debug information if enabled
+            if debug:
+                result_dict["meta"]["debug"] = {
+                    "python_version": sys.version,
+                    "platform": sys.platform,
+                    "executable": sys.executable
+                }
+                
+            return result_dict
+            
+        except CollectorPartialError as e:
+            # Handle partial results
+            result = e.partial or {}
+            error_info = {
+                "messages": e.messages,
+                "type": "CollectorPartialError"
+            }
+            if debug:
+                error_info["traceback"] = traceback.format_exc()
+                
+            return {
+                "meta": {
+                    "collector_type": result.get("metadata", {}).get("collector_type", self.COLLECTOR_TYPE),
+                    "collector_name": result.get("metadata", {}).get("collector_name", self.NAME),
+                    "collector_version": result.get("metadata", {}).get("collector_version", self.VERSION),
+                    "collection_time": result.get("metadata", {}).get("collection_time", 
+                        datetime.now(timezone.utc).isoformat()),
+                    "status": "partial",
+                    "errors": e.messages,
+                    "debug": error_info if debug else None
+                },
+                "data": result.get("data", {})
+            }
+            
+        except Exception as e:
+            error_msg = str(e)
+            print(f"Error in collector {self.NAME}: {error_msg}", file=sys.stderr)
+            
+            error_info = {
+                "message": error_msg,
+                "type": type(e).__name__,
+                "args": getattr(e, 'args', [])
+            }
+            if debug:
+                error_info["traceback"] = traceback.format_exc()
+            
+            # Create a failed result
+            return {
+                "meta": {
+                    "collector_type": self.COLLECTOR_TYPE,
+                    "collector_name": self.NAME,
+                    "collector_version": self.VERSION,
+                    "collection_time": datetime.now(timezone.utc).isoformat(),
+                    "status": "failed",
+                    "errors": [error_msg],
+                    "debug": error_info if debug else None
+                },
+                "data": {}
+            }
 
 
 class BlockchainCollector(CollectorBase):

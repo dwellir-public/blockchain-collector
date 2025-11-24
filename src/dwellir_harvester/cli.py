@@ -40,63 +40,69 @@ def build_parser() -> argparse.ArgumentParser:
         type=Path,
         default=None
     )
-    # Schema validation is now handled by the schema itself
+    collect_parser.add_argument(
+        "--no-validate",
+        action="store_false",
+        dest="validate",
+        help="Disable schema validation of the output."
+    )
+    collect_parser.add_argument(
+        "--debug",
+        action="store_true",
+        help="Enable debug output with detailed error information."
+    )
     
     return parser
 
 def main(args: Optional[List[str]] = None) -> int:
-    """Main entry point for the CLI.
-    
-    Args:
-        args: Command line arguments (defaults to sys.argv[1:])
-        
-    Returns:
-        int: Exit code (0 for success, non-zero for error)
-    """
-    # Parse command line arguments
+    """Main entry point for the CLI."""
     parser = build_parser()
     parsed_args = parser.parse_args(args)
     
     if parsed_args.cmd == "collect":
-        # Get available collectors
-        available_collectors = load_collectors()
-        
-        # Check if all requested collectors exist
-        invalid = [name for name in parsed_args.collectors if name not in available_collectors]
-        if invalid:
-            print(f"Error: Unknown collectors: {', '.join(invalid)}", file=sys.stderr)
-            print(f"Available collectors: {', '.join(sorted(available_collectors.keys()))}", file=sys.stderr)
-            return 1
-        
-        result = {}
-
         try:
+            # Get the schema path (use bundled schema if not specified)
+            schema_path = parsed_args.schema or str(bundled_schema_path())
+            
+            # Load all available collectors
+            all_collectors = load_collectors()
+            
+            # Filter to only the requested collectors
+            collectors = []
+            for name in parsed_args.collectors:
+                if name not in all_collectors:
+                    print(f"Warning: Unknown collector '{name}', skipping", file=sys.stderr)
+                    continue
+                collectors.append(all_collectors[name])
+            
+            if not collectors:
+                print("Error: No valid collectors specified", file=sys.stderr)
+                return 1
+                
             # Run the collectors
             result = collect_all(
-                collector_names=parsed_args.collectors,
-                schema_path=str(parsed_args.schema) if parsed_args.schema else str(bundled_schema_path())
+                [c.NAME for c in collectors],
+                schema_path=schema_path,
+                validate=getattr(parsed_args, 'validate', True),  # Use getattr for backward compatibility
+                debug=parsed_args.debug
             )
             
-            # Convert to JSON
+            # Output the result
             output = json.dumps(result, indent=2)
             
-            # Write to file or stdout
             if parsed_args.output:
                 parsed_args.output.write_text(output)
-                print(f"Results written to {parsed_args.output}", file=sys.stderr)
+                print(f"Results written to {parsed_args.output}")
             else:
                 print(output)
                 
             return 0
-            
+                
         except Exception as e:
-            print(f"Error in cli.py parsing result from collect_all(): {e}", file=sys.stderr)
-            if hasattr(e, '__traceback__'):
+            print(f"Error: {str(e)}", file=sys.stderr)
+            if parsed_args.debug:  # Show traceback in debug mode
                 import traceback
-                traceback.print_exc(file=sys.stderr)
+                traceback.print_exc()
             return 1
     
     return 0
-
-if __name__ == "__main__":
-    sys.exit(main())

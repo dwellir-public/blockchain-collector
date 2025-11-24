@@ -1,74 +1,21 @@
 from __future__ import annotations
-import json
 import os
-import socket
 import subprocess
 import shutil
-from typing import Dict, Optional, Tuple, List
-from urllib import request, error as urlerror
+from typing import Dict, Optional, List
+
 from ..core import CollectResult, CollectorPartialError, CollectorFailedError
+from ..rpc_substrate import (
+    rpc_get_system_version,
+    rpc_get_system_name,
+    rpc_get_system_chain,
+    rpc_get_genesis_hash
+)
 from .collector_base import CollectorBase
 
 DEFAULT_RPC_URL = "http://127.0.0.1:9944"
 
-def _jsonrpc(url: str, method: str, params=None, timeout: float = 2.5):
-    if params is None:
-        params = []
-    payload = json.dumps({"jsonrpc": "2.0", "id": 1, "method": method, "params": params}).encode()
-    req = request.Request(url, data=payload, headers={"Content-Type": "application/json"})
-    try:
-        with request.urlopen(req, timeout=timeout) as resp:
-            data = json.loads(resp.read().decode())
-            if "error" in data:
-                return None, f"rpc {method} error: {data['error']}"
-            return data.get("result"), None
-    except socket.timeout:
-        return None, f"rpc {method} timeout after {timeout}s (url={url})"
-    except urlerror.URLError as e:
-        reason = getattr(e, "reason", e)
-        return None, f"rpc {method} connection error (url={url}): {reason}"
-    except Exception as e:
-        return None, f"rpc {method} unexpected error (url={url}): {e}"
-
-
-def _get_system_version(url: str) -> Tuple[Optional[str], Optional[str]]:
-    res, err = _jsonrpc(url, "system_version")
-    if res is None:
-        return None, err
-    try:
-        return str(res), None
-    except Exception as e:
-        return None, f"rpc system_version parse error for {res!r}: {e}"
-
-
-def _get_system_name(url: str) -> Tuple[Optional[str], Optional[str]]:
-    res, err = _jsonrpc(url, "system_name")
-    if res is None:
-        return None, err
-    try:
-        return str(res), None
-    except Exception as e:
-        return None, f"rpc system_name parse error for {res!r}: {e}"
-
-
-def _get_system_chain(url: str) -> Tuple[Optional[str], Optional[str]]:
-    res, err = _jsonrpc(url, "system_chain")
-    if res is None:
-        return None, err
-    try:
-        return str(res), None
-    except Exception as e:
-        return None, f"rpc system_chain parse error for {res!r}: {e}"
-
-
-def _get_genesis_hash(url: str) -> Tuple[Optional[str], Optional[str]]:
-    res, err = _jsonrpc(url, "chain_getBlockHash", [0])
-    if res is None:
-        return None, err
-    try:
-        return str(res), None
-    except Exception as e:
-        return None, f"rpc chain_getBlockHash parse error for {res!r}: {e}"
+# RPC functions are now imported from rpc_substrate
 
 class PolkadotCollector(CollectorBase):
     NAME = "polkadot"
