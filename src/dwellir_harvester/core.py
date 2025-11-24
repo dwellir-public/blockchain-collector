@@ -3,6 +3,7 @@ from __future__ import annotations
 import importlib
 import json
 import platform
+from . import __version__
 import socket
 import time
 import sys
@@ -166,17 +167,16 @@ def run_collector(collector_name: str, schema_path: str = None, debug: bool = Fa
         
         # For the host collector, ensure it has the correct structure
         if collector_name == "host":
-            return {
-                "meta": {
-                    "collector_type": "host",
-                    "collector_name": collector_name,
-                    "collector_version": getattr(CollectorCls, "VERSION", "0.0.0"),
-                    "collection_time": now_iso_tz(),
-                    "status": result.get("meta", {}).get("status", "success"),
-                    "errors": result.get("meta", {}).get("errors", [])
-                },
-                "data": result.get("data", {})
-            }
+            return CollectResult(
+            metadata=CollectorMetadata(
+                collector_name=collector_name,
+                collector_version=getattr(CollectorCls, "VERSION", "0.0.0"),
+                collector_type="host",
+                status=result.get("meta", {}).get("status", "success"),
+                errors=result.get("meta", {}).get("errors", [])
+            ),
+            data=result.get("data", {})
+        ).to_dict()
         
         # Ensure the result has the expected structure
         if not isinstance(result, dict):
@@ -224,7 +224,8 @@ def collect_all(collector_names: List[str], schema_path: str, validate: bool = T
         Dict containing the collected data in the format:
         {
             "harvester": { ... },
-            "host": { ... },
+            "system": { ... }, # special collector. Always populated.
+            "host": { ... },   # special collector. Can be empty if no host collector is specified
             "collectors": {
                 "collector_name": {
                     "meta": { ... },
@@ -240,7 +241,7 @@ def collect_all(collector_names: List[str], schema_path: str, validate: bool = T
     # Initialize the result structure
     result = {
         "harvester": {
-            "harvester-version": "1.0.0",
+            "harvester-version": __version__.__version__,
             "collection_time": collection_time,
             "collectors_used": collector_names.copy()  # Make a copy to avoid modifying the input
         },
@@ -269,6 +270,7 @@ def collect_all(collector_names: List[str], schema_path: str, validate: bool = T
                 collector_data["message"] = collector_result["message"]
                 
             # Special handling for host collector
+            # Add that to a top level result key
             if name == "host":
                 result["host"] = collector_data["data"]
             else:
