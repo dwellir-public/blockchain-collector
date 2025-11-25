@@ -14,6 +14,7 @@ from ..collector_base import (
 from .null import NullCollector
 from .dummychain import DummychainCollector
 from .host import HostCollector
+from .juju import JujuCollector
 # from .substrate import SubstrateCollector
 
 # What this package exports
@@ -27,5 +28,6 @@ __all__ = [
     "NullCollector",
     "DummychainCollector",
 #    "PolkadotCollector",
-    "HostCollector"
+    "HostCollector",
+    "JujuCollector"
 ]
