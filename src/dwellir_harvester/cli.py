@@ -1,10 +1,43 @@
 import argparse
 import json
+import logging
 import os
 import sys
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import List, Optional, Dict, Any
+
+def setup_logging(debug=False):
+    """Configure logging with the specified debug level."""
+    log_level = logging.DEBUG if debug else logging.INFO
+    
+    # Configure the root logger
+    root_logger = logging.getLogger()
+    root_logger.setLevel(log_level)
+    
+    # Clear any existing handlers
+    for handler in root_logger.handlers[:]:
+        root_logger.removeHandler(handler)
+    
+    # Create a console handler
+    console = logging.StreamHandler()
+    console.setLevel(log_level)
+    
+    # Set the formatter
+    formatter = logging.Formatter(
+        '%(asctime)s %(levelname)s [%(threadName)s] %(name)s: %(message)s',
+        datefmt='%Y-%m-%dT%H:%M:%S%z'
+    )
+    console.setFormatter(formatter)
+    
+    # Add the handler to the root logger
+    root_logger.addHandler(console)
+    
+    # Get the main logger
+    log = logging.getLogger("dwellir-harvester")
+    log.setLevel(log_level)
+    
+    return log
 
 try:
     from .core import collect_all, bundled_schema_path, load_collectors, run_collector
@@ -61,51 +94,46 @@ def main(args: Optional[List[str]] = None) -> int:
     parser = build_parser()
     parsed_args = parser.parse_args(args)
     
+    # Configure logging
+    log = setup_logging(debug=parsed_args.debug)
+    
     if parsed_args.cmd == "collect":
         start_time = datetime.now(timezone.utc)
         
-        if parsed_args.debug:
-            print(f"[DEBUG] Starting collection process at {start_time.isoformat()}", file=sys.stderr)
-            print(f"[DEBUG] Python version: {sys.version}", file=sys.stderr)
-            print(f"[DEBUG] Command line arguments: {sys.argv}", file=sys.stderr)
-            print(f"[DEBUG] Parsed arguments: {vars(parsed_args)}", file=sys.stderr)
+        log.debug(f"Starting collection process at {start_time.isoformat()}")
+        log.debug(f"Python version: {sys.version}")
+        log.debug(f"Command line arguments: {sys.argv}")
+        log.debug(f"Parsed arguments: {vars(parsed_args)}")
         
         try:
             # Get the schema path (use bundled schema if not specified)
             schema_path = parsed_args.schema or str(bundled_schema_path())
             
-            if parsed_args.debug:
-                print(f"[DEBUG] Using schema path: {schema_path}", file=sys.stderr)
-                print("[DEBUG] Loading all available collectors...", file=sys.stderr)
+            log.debug(f"Using schema path: {schema_path}")
+            log.debug("Loading all available collectors...")
             
             # Load all available collectors
             all_collectors = load_collectors()
             
-            if parsed_args.debug:
-                print(f"[DEBUG] Found {len(all_collectors)} total collectors", file=sys.stderr)
-                print(f"[DEBUG] Requested collectors: {parsed_args.collectors}", file=sys.stderr)
+            log.debug(f"Found {len(all_collectors)} total collectors")
+            log.debug(f"Requested collectors: {parsed_args.collectors}")
             
             # Filter to only the requested collectors
             collectors = []
             for name in parsed_args.collectors:
                 if name not in all_collectors:
-                    msg = f"Warning: Unknown collector '{name}', skipping"
-                    print(msg, file=sys.stderr)
-                    if parsed_args.debug:
-                        print(f"[DEBUG] Available collectors: {list(all_collectors.keys())}", file=sys.stderr)
+                    log.warning(f"Unknown collector '{name}', skipping")
+                    log.debug(f"Available collectors: {list(all_collectors.keys())}")
                     continue
                 collectors.append(all_collectors[name])
             
             if not collectors:
-                error_msg = "Error: No valid collectors specified"
-                print(error_msg, file=sys.stderr)
-                if parsed_args.debug:
-                    print("[DEBUG] No valid collectors found after filtering", file=sys.stderr)
+                log.error("No valid collectors specified")
+                log.debug("No valid collectors found after filtering")
                 return 1
             
-            if parsed_args.debug:
-                print(f"[DEBUG] Running {len(collectors)} collectors: {[c.NAME for c in collectors]}", file=sys.stderr)
-                print(f"[DEBUG] Validation is {'enabled' if parsed_args.validate else 'disabled'}", file=sys.stderr)
+            log.debug(f"Running {len(collectors)} collectors: {[c.NAME for c in collectors]}")
+            log.debug(f"Validation is {'enabled' if parsed_args.validate else 'disabled'}")
             
             # Run the collectors
             result = collect_all(
@@ -119,40 +147,28 @@ def main(args: Optional[List[str]] = None) -> int:
             output = json.dumps(result, indent=2)
             
             if parsed_args.output:
-                if parsed_args.debug:
-                    print(f"[DEBUG] Writing results to {parsed_args.output}", file=sys.stderr)
+                log.debug(f"Writing results to {parsed_args.output}")
                 try:
                     parsed_args.output.write_text(output)
-                    print(f"Results written to {parsed_args.output}")
-                    if parsed_args.debug:
-                        print(f"[DEBUG] Successfully wrote {len(output)} bytes to {parsed_args.output}", file=sys.stderr)
+                    log.info(f"Results written to {parsed_args.output}")
+                    log.debug(f"Successfully wrote {len(output)} bytes to {parsed_args.output}")
                 except Exception as e:
-                    error_msg = f"Error writing to {parsed_args.output}: {str(e)}"
-                    print(error_msg, file=sys.stderr)
-                    if parsed_args.debug:
-                        import traceback
-                        traceback.print_exc(file=sys.stderr)
+                    log.error(f"Error writing to {parsed_args.output}: {str(e)}", exc_info=parsed_args.debug)
                     return 1
             else:
-                if parsed_args.debug:
-                    print("[DEBUG] Outputting results to stdout", file=sys.stderr)
+                log.debug("Outputting results to stdout")
                 print(output)
             
-            if parsed_args.debug:
-                duration = (datetime.now(timezone.utc) - start_time).total_seconds()
-                print(f"[DEBUG] Collection completed in {duration:.2f} seconds", file=sys.stderr)
+            duration = (datetime.now(timezone.utc) - start_time).total_seconds()
+            log.debug(f"Collection completed in {duration:.2f} seconds")
                 
             return 0
                 
         except Exception as e:
-            error_msg = f"Error: {str(e)}"
-            print(error_msg, file=sys.stderr)
-            if parsed_args.debug:  # Show traceback in debug mode
-                import traceback
-                print("\n[DEBUG] Exception details:", file=sys.stderr)
-                traceback.print_exc(file=sys.stderr)
-                print(f"\n[DEBUG] Current working directory: {os.getcwd()}", file=sys.stderr)
-                print(f"[DEBUG] Python path: {sys.path}", file=sys.stderr)
+            log.error(f"Error: {str(e)}", exc_info=parsed_args.debug)
+            if parsed_args.debug:
+                log.debug(f"Current working directory: {os.getcwd()}")
+                log.debug(f"Python path: {sys.path}")
             return 1
     
     return 0

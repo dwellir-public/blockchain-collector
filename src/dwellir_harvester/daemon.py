@@ -13,11 +13,39 @@ from typing import Dict, Any, Optional
 from dwellir_harvester.core import collect_all, bundled_schema_path
 
 # Configure logging
-logging.basicConfig(
-    level=logging.INFO,
-    format='%(asctime)s %(levelname)s [%(threadName)s] %(name)s: %(message)s',
-    datefmt='%Y-%m-%dT%H:%M:%S%z'
-)
+def setup_logging(debug=False):
+    """Configure logging with the specified debug level."""
+    log_level = logging.DEBUG if debug else logging.INFO
+    
+    # Configure the root logger
+    root_logger = logging.getLogger()
+    root_logger.setLevel(log_level)
+    
+    # Clear any existing handlers
+    for handler in root_logger.handlers[:]:
+        root_logger.removeHandler(handler)
+    
+    # Create a console handler
+    console = logging.StreamHandler()
+    console.setLevel(log_level)
+    
+    # Set the formatter
+    formatter = logging.Formatter(
+        '%(asctime)s %(levelname)s [%(threadName)s] %(name)s: %(message)s',
+        datefmt='%Y-%m-%dT%H:%M:%S%z'
+    )
+    console.setFormatter(formatter)
+    
+    # Add the handler to the root logger
+    root_logger.addHandler(console)
+    
+    # Get the main logger
+    log = logging.getLogger("dwellir-harvester")
+    log.setLevel(log_level)
+    
+    return log
+
+# Initialize logging with default level (will be updated in main)
 log = logging.getLogger("dwellir-harvester")
 
 class CollectorDaemon:

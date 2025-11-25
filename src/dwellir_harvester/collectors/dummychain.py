@@ -1,7 +1,6 @@
 from typing import Dict, Any, Optional, List, Tuple
 import subprocess
-from ..journalctl import get_last_journal_message
-from ..systemctl_status import get_essential_service_properties
+from ..systemd_utils import get_last_journal_message, get_essential_service_properties
 from .collector_base import BlockchainCollector, CollectResult
 
 class DummychainCollector(BlockchainCollector):
@@ -51,6 +50,7 @@ class DummychainCollector(BlockchainCollector):
             else:
                 result.update({
                     "journal": {
+                        "service": journal_entry.get("service", ""),
                         "message": journal_entry.get("message", ""),
                         "timestamp": journal_entry.get("timestamp", ""),
                         "cmdline": journal_entry.get("cmdline", "")
