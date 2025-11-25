@@ -1,6 +1,45 @@
 """
 Module for interacting with systemd services via systemctl and journalctl commands.
 Provides a unified interface to retrieve service properties and logs.
+
+The most useful functions are:
+
+- get_service_properties # Get properties for a systemd service using systemctl show.
+- get_essential_service_properties  # Get essential properties for a service in a more structured format.
+- get_systemd_status                # Get systemd status for the dummychain service.
+- get_journal_entries               # Get journal entries for a systemd service.
+
+Return value of get_systemd_status():
+The function returns a dictionary with the following structure:
+{
+    # Journal entry fields (if available)
+    'message': str,           # The log message
+    'timestamp': str,         # ISO formatted timestamp of the log entry
+    'service': str,           # A selection of essential fields from the service properties
+    'priority': str,          # Log priority/level
+    'pid': str,               # Process ID
+    'unit': str,              # Systemd unit name
+    
+    # Systemd service properties (if available)
+    'service': {
+        'name': str,          # Service name
+        'description': str,   # Service description
+        'load_state': str,    # Load state (e.g., 'loaded')
+        'active_state': str,  # Active state (e.g., 'active', 'inactive', 'failed')
+        'sub_state': str,     # Substate (more detailed state)
+        'main_pid': int,      # Main process ID
+        'memory_usage': str,  # Formatted memory usage (e.g., '123.4 MB')
+        'cpu_percent': float, # CPU usage percentage
+        'uptime': str,        # Formatted uptime (e.g., '1h 23min 45s')
+        'environment': dict   # Environment variables
+    },
+    
+    # Error fields (if any errors occurred)
+    'journal_error': dict,    # Error details if journal access failed
+    'service_error': dict,    # Error details if service properties access failed
+    'journal_warning': str,   # Warning message if no journal entries found
+    'service_warning': str    # Warning message if no service properties found
+}
 """
 
 import json

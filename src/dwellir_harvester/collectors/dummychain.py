@@ -1,6 +1,6 @@
 from typing import Dict, Any, Optional, List, Tuple
 import subprocess
-from ..systemd_utils import get_last_journal_message, get_essential_service_properties, get_systemd_status
+from ..systemd_utils import get_systemd_status
 from .collector_base import BlockchainCollector, CollectResult
 import logging
 logger = logging.getLogger(__name__)
@@ -87,7 +87,7 @@ class DummychainCollector(BlockchainCollector):
 
         # Get systemd status
         try:
-            systemd_status = systemd_utils._get_systemd_status(self.service_name)
+            systemd_status = get_systemd_status(self.service_name)
             logger.debug(f"Fetched systemd: {systemd_status}")
         except Exception as e:
             systemd_status = {
