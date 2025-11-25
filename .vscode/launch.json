@@ -1,0 +1,27 @@
+{
+    "version": "0.2.0",
+    "configurations": [
+        {
+            "name": "Python: dwellir_harvester.cli (module)",
+            "type": "debugpy",
+            "request": "launch",
+            "module": "dwellir_harvester.cli",
+            "args": ["${input:cliArgs}"],
+            "justMyCode": false,
+            "cwd": "${workspaceFolder}",
+            "console": "integratedTerminal",
+            "env": {
+                "PYTHONPATH": "${workspaceFolder}/src",
+                "PYTHONUNBUFFERED": "1"
+            }
+        }
+    ],
+    "inputs": [
+        {
+            "id": "cliArgs",
+            "type": "promptString",
+            "description": "Arguments to pass to dwellir_harvester.cli (e.g. \"collect dummychain --debug\")",
+            "default": "collect dummychain --debug"
+        }
+    ]
+}
