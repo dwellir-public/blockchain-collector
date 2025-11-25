@@ -62,13 +62,37 @@ By default, the daemon:
 - Uses the "host" collector
 - Validates output against the schema
 
+### Secure the Daemon with Tokens
+
+The daemon can require a bearer token for all endpoints. Auth is **disabled by default**; set tokens to enable it.
+
+- Single or multiple tokens via CLI:
+  ```bash
+  dwellir-harvester-daemon --auth-token secret1 --auth-token secret2
+  ```
+- Environment variable:
+  ```bash
+  DAEMON_AUTH_TOKENS=secret1,secret2 dwellir-harvester-daemon
+  ```
+- Token file (JSON/YAML list of `{ "token": "...", "label": "client-name", "enabled": true }`):
+  ```bash
+  dwellir-harvester-daemon --auth-token-file /path/tokens.json
+  # or
+  DAEMON_AUTH_TOKEN_FILE=/path/tokens.json dwellir-harvester-daemon
+  ```
+
+Requests must send `Authorization: Bearer <token>` (or `X-Auth-Token`). Invalid/missing tokens get `401 Unauthorized` with `WWW-Authenticate: Bearer`.
+
+> Tip: Put the token file somewhere readable by the daemon user, and omit raw secrets from logs—only labels are logged on failures.
+
 ## Configuration
 
 ### Command Line Arguments
 
 ```
 usage: dwellir-harvester-daemon [-h] [--collectors COLLECTORS [COLLECTORS ...]] [--host HOST] [--port PORT] [--debug]
-                               [--interval INTERVAL] [--schema SCHEMA] [--no-validate] [--log-level {DEBUG,INFO,WARNING,ERROR,CRITICAL}]
+                               [--interval INTERVAL] [--schema SCHEMA] [--auth-token AUTH_TOKENS] [--auth-token-file AUTH_TOKEN_FILE]
+                               [--no-validate] [--log-level {DEBUG,INFO,WARNING,ERROR,CRITICAL}]
 
 Dwellir Harvester Daemon
 
@@ -80,6 +104,10 @@ options:
   --port PORT           Port to run the HTTP server on (default: 18080)
   --interval INTERVAL   Collection interval in seconds (default: 300)
   --schema SCHEMA       Path to JSON schema file (defaults to bundled schema)
+  --auth-token AUTH_TOKENS
+                        Bearer token to require for HTTP access (can be specified multiple times)
+  --auth-token-file AUTH_TOKEN_FILE
+                        Path to JSON/YAML file containing token entries: [{"token": "...", "label": "...", "enabled": true}]
   --no-validate         Disable schema validation
   --debug               Enable debug logging
   --log-level {DEBUG,INFO,WARNING,ERROR,CRITICAL}
@@ -95,6 +123,8 @@ options:
 - `COLLECTORS`: Space-separated list of collectors to run (default: `host`)
 - `VALIDATE`: Enable/disable schema validation (default: `true`)
 - `DEBUG`: Enable debug logging (default: `false`)
+- `DAEMON_AUTH_TOKENS`: Comma-separated list of bearer tokens
+- `DAEMON_AUTH_TOKEN_FILE`: Path to token file (JSON/YAML list of `{token,label,enabled}`)
 
 ## Running as a Systemd Service
 

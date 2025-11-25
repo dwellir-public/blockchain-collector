@@ -6,8 +6,10 @@ import time
 import logging
 import threading
 import argparse
+import hmac
+from pathlib import Path
 from http.server import HTTPServer, BaseHTTPRequestHandler
-from typing import Dict, Any, Optional
+from typing import Dict, Any, Optional, List, Tuple
 
 # Import core functionality from the package
 from dwellir_harvester.core import collect_all, bundled_schema_path
@@ -57,11 +59,106 @@ class CollectorDaemon:
         self.worker_thread: Optional[threading.Thread] = None
         self.httpd: Optional[HTTPServer] = None
         self.output_file = config.get('output_file', '/var/lib/dwellir-harvester/harvested-data.json')
+        self.auth_tokens = self._load_auth_tokens(config)
         
         # Ensure output directory exists
         if self.output_file:
             output_dir = os.path.dirname(self.output_file)
             os.makedirs(output_dir, exist_ok=True)
+
+    def _load_auth_tokens(self, config: Dict[str, Any]) -> List[Dict[str, Any]]:
+        """Load allowed auth tokens from env/config/file.
+        
+        Returns a list of dicts: {"token": str, "label": Optional[str], "enabled": bool}
+        Empty list means auth disabled.
+        """
+        tokens: List[Dict[str, Any]] = []
+
+        token_file = config.get("auth_token_file") or os.environ.get("DAEMON_AUTH_TOKEN_FILE")
+        if token_file:
+            path = Path(token_file)
+            if not path.exists():
+                log.error(f"Auth token file {token_file} does not exist; auth disabled")
+                return []
+            try:
+                raw = path.read_text()
+                parsed: Any = None
+                try:
+                    parsed = json.loads(raw)
+                except Exception:
+                    try:
+                        import yaml  # type: ignore
+                        parsed = yaml.safe_load(raw)
+                    except Exception as e:
+                        log.error(f"Failed to parse auth token file {token_file}: {e}; auth disabled")
+                        return []
+                if not isinstance(parsed, list):
+                    log.error(f"Auth token file {token_file} must be a list of objects; auth disabled")
+                    return []
+                for entry in parsed:
+                    if not isinstance(entry, dict) or "token" not in entry:
+                        log.warning(f"Skipping invalid token entry in {token_file}: {entry!r}")
+                        continue
+                    tokens.append(
+                        {
+                            "token": str(entry["token"]),
+                            "label": entry.get("label"),
+                            "enabled": bool(entry.get("enabled", True)),
+                        }
+                    )
+            except Exception as e:
+                log.error(f"Failed to read auth token file {token_file}: {e}; auth disabled")
+                return []
+        else:
+            env_tokens = config.get("auth_tokens") or os.environ.get("DAEMON_AUTH_TOKENS")
+            if env_tokens:
+                if isinstance(env_tokens, str):
+                    items = [t.strip() for t in env_tokens.split(",") if t.strip()]
+                elif isinstance(env_tokens, list):
+                    items = [str(t).strip() for t in env_tokens if str(t).strip()]
+                else:
+                    items = []
+                for idx, tok in enumerate(items):
+                    tokens.append({"token": tok, "label": f"env-{idx+1}", "enabled": True})
+
+        if tokens:
+            log.info(f"Auth enabled with {len(tokens)} token(s)")
+        else:
+            log.info("Auth disabled (no tokens configured)")
+        return tokens
+
+    def _extract_presented_token(self, headers) -> Optional[str]:
+        """Extract token from Authorization Bearer or X-Auth-Token."""
+        auth_header = headers.get("Authorization")
+        if auth_header and auth_header.lower().startswith("bearer "):
+            return auth_header.split(" ", 1)[1].strip()
+        alt = headers.get("X-Auth-Token")
+        if alt:
+            return alt.strip()
+        return None
+
+    def _authorize(self, headers) -> Tuple[bool, Optional[str], str]:
+        """Check request headers against configured tokens.
+        
+        Returns (allowed, label, reason)
+        """
+        if not self.auth_tokens:
+            return True, None, "auth_disabled"
+
+        presented = self._extract_presented_token(headers)
+        if not presented:
+            return False, None, "missing_token"
+
+        for entry in self.auth_tokens:
+            token = entry.get("token")
+            enabled = entry.get("enabled", True)
+            label = entry.get("label")
+            if hmac.compare_digest(str(presented), str(token)):
+                if enabled:
+                    return True, label, "ok"
+                return False, label, "revoked"
+
+        return False, None, "invalid_token"
 
     def run_collectors(self) -> Dict[str, Any]:
         """Run all collectors and return the results."""
@@ -201,6 +298,11 @@ class CollectorDaemon:
 
         class RequestHandler(BaseHTTPRequestHandler):
             def do_GET(self):
+                allowed, label, reason = daemon._authorize(self.headers)
+                if not allowed:
+                    self._handle_unauthorized(label, reason)
+                    return
+
                 path = self.path.split('?', 1)[0]
                 if path == '/metadata':
                     self._handle_metadata()
@@ -209,10 +311,13 @@ class CollectorDaemon:
                 else:
                     self._handle_not_found()
 
-            def _set_headers(self, status_code=200, content_type="application/json"):
+            def _set_headers(self, status_code=200, content_type="application/json", extra_headers: Optional[Dict[str, str]] = None):
                 self.send_response(status_code)
                 self.send_header("Content-Type", content_type)
                 self.send_header("Cache-Control", "no-store")
+                if extra_headers:
+                    for k, v in extra_headers.items():
+                        self.send_header(k, v)
                 self.end_headers()
 
             def _handle_metadata(self):
@@ -233,6 +338,21 @@ class CollectorDaemon:
                     "endpoints": ["/metadata", "/healthz"]
                 }).encode('utf-8'))
 
+            def _handle_unauthorized(self, label: Optional[str], reason: str):
+                # Do not log tokens; log label if available
+                msg = f"Unauthorized request from {self.address_string()} reason={reason}"
+                if label:
+                    msg += f" label={label}"
+                log.warning(msg)
+                self._set_headers(
+                    401,
+                    extra_headers={"WWW-Authenticate": "Bearer"}
+                )
+                body = {"error": "unauthorized", "reason": reason}
+                if label:
+                    body["label"] = label
+                self.wfile.write(json.dumps(body).encode("utf-8"))
+
             def log_message(self, fmt, *args):
                 log.info(f"{self.address_string()} - {fmt % args}")
 
@@ -252,6 +372,10 @@ def parse_args():
     parser.add_argument('--output', default='/var/lib/dwellir-harvester/harvested-data.json',
                       help='Path to output file for collected data (default: /var/lib/dwellir-harvester/harvested-data.json)')
     parser.add_argument('--schema', help='Path to JSON schema file (defaults to bundled schema)')
+    parser.add_argument('--auth-token', action='append', dest='auth_tokens',
+                      help='Bearer token to require for HTTP access (can be specified multiple times)')
+    parser.add_argument('--auth-token-file',
+                      help='Path to JSON/YAML file containing token entries: [{"token": "...", "label": "...", "enabled": true}]')
     parser.add_argument('--no-validate', action='store_false', dest='validate',
                       help='Disable schema validation')
     parser.add_argument('--debug', action='store_true',
@@ -287,7 +411,9 @@ def main():
         'validate': args.validate,
         'output_file': args.output,
         'debug': args.debug,
-        'schema_path': args.schema  # Pass the schema path to the daemon
+        'schema_path': args.schema,  # Pass the schema path to the daemon
+        'auth_tokens': args.auth_tokens,
+        'auth_token_file': args.auth_token_file,
     })
     
     try:

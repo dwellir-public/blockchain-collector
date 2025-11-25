@@ -16,6 +16,10 @@ class NullCollector(GenericCollector):
         """Factory method to create a new instance."""
         return cls(*args, **kwargs)
 
+    def _get_gas_fee(self) -> str:
+        """Get the gasfee."""
+        return "0.1"
+
     def collect(self) -> Dict[str, Any]:
         """
         Collect and return data in the new schema format.
@@ -34,7 +38,8 @@ class NullCollector(GenericCollector):
             },
             "data": {
                 "foo": "bar",
-                "number": 42
+                "number": 42,
+                "gasFee": self._get_gas_fee()
             },
             "message": "This is a message from the null GenericCollector"
         }
