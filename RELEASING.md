@@ -20,7 +20,7 @@ This document outlines the steps to create a new release of the Dwellir Harveste
      ```bash
      python scripts/update_version.py
      ```
-   - Verify the version was updated in `src/dwellir_harvester/__version__.py`
+   - Verify the version was updated in `src/dwellir_harvester_app/__version__.py`
 
 2. **Update the changelog**
    - Update `CHANGELOG.md` with the new version and changes
@@ -29,7 +29,7 @@ This document outlines the steps to create a new release of the Dwellir Harveste
 
 3. **Commit the changes**
    ```bash
-   git add pyproject.toml src/dwellir_harvester/__version__.py CHANGELOG.md
+   git add pyproject.toml src/dwellir_harvester_app/__version__.py CHANGELOG.md
    git commit -m "Bump version to X.Y.Z"
    git push origin main  # or your development branch
    ```
@@ -83,7 +83,7 @@ This document outlines the steps to create a new release of the Dwellir Harveste
    ```
 3. Commit the changes:
    ```bash
-   git add pyproject.toml src/dwellir_harvester/__version__.py
+   git add pyproject.toml src/dwellir_harvester_app/__version__.py
    git commit -m "Bump version to X.Y.Z-dev"
    git push origin main  # or your development branch
    ```

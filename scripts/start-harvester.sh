@@ -16,7 +16,7 @@ mkdir -p "$DATA_DIR"
 export PYTHONPATH="${PYTHONPATH}:$(pwd)/src"
 
 # Start the daemon
-exec python3 -m dwellir_harvester.daemon \
+exec python3 -m dwellir_harvester_app.daemon \
     --host 0.0.0.0 \
     --port "$PORT" \
     --interval "$INTERVAL" \

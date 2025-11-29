@@ -11,6 +11,8 @@ An extensible Python tool to collect metadata from **local blockchain nodes** an
 
 ## Installation
 
+This repo depends on the shared SDK `dwellir-harvester-lib`. The default dependency points to a sibling checkout at `../dwellir-harvester-lib`; adjust `pyproject.toml` if yours lives elsewhere or you install it from a package index.
+
 ### From Source
 
 1. Clone the repository:
@@ -92,6 +94,7 @@ Requests must send `Authorization: Bearer <token>` (or `X-Auth-Token`). Invalid/
 ```
 usage: dwellir-harvester-daemon [-h] [--collectors COLLECTORS [COLLECTORS ...]] [--host HOST] [--port PORT] [--debug]
                                [--interval INTERVAL] [--schema SCHEMA] [--auth-token AUTH_TOKENS] [--auth-token-file AUTH_TOKEN_FILE]
+                               [--collector-path COLLECTOR_PATH]
                                [--no-validate] [--log-level {DEBUG,INFO,WARNING,ERROR,CRITICAL}]
 
 Dwellir Harvester Daemon
@@ -108,6 +111,8 @@ options:
                         Bearer token to require for HTTP access (can be specified multiple times)
   --auth-token-file AUTH_TOKEN_FILE
                         Path to JSON/YAML file containing token entries: [{"token": "...", "label": "...", "enabled": true}]
+  --collector-path COLLECTOR_PATH
+                        Additional paths to search for collectors (can be repeated). Also honors HARVESTER_COLLECTOR_PATHS.
   --no-validate         Disable schema validation
   --debug               Enable debug logging
   --log-level {DEBUG,INFO,WARNING,ERROR,CRITICAL}
@@ -125,6 +130,21 @@ options:
 - `DEBUG`: Enable debug logging (default: `false`)
 - `DAEMON_AUTH_TOKENS`: Comma-separated list of bearer tokens
 - `DAEMON_AUTH_TOKEN_FILE`: Path to token file (JSON/YAML list of `{token,label,enabled}`)
+- `HARVESTER_COLLECTOR_PATHS`: Path list (os.pathsep-separated) to search for plugin collectors
+
+### Plugin collectors
+
+- Add your collector module to a directory and point the CLI/daemon to it:
+  ```bash
+  dwellir-harvester collect sample_plugin --collector-path ./examples/plugins
+  ```
+- You can also set `HARVESTER_COLLECTOR_PATHS=./examples/plugins` to make the paths available without flags.
+- Run a collector class directly (SDK runner):
+  ```bash
+  python -m dwellir_harvester.lib.run examples.plugins.sample_collector:SamplePluginCollector
+  # or add a path for local plugins
+  python -m dwellir_harvester.lib.run runner_plugin:RunnerPlugin --collector-path ./examples/plugins
+  ```
 
 ## Running as a Systemd Service
 
@@ -190,11 +210,32 @@ options:
    mypy .
    ```
 
+### Local/offline dev & test bench (with sibling lib)
+
+If you keep the library as a sibling checkout and are working without internet access, use this flow:
+
+1. Create a virtualenv that can see system packages (for setuptools) and activate it:
+   ```bash
+   python3 -m venv --system-site-packages .venv
+   source .venv/bin/activate
+   ```
+2. Install the library from the sibling path without build isolation (avoids downloading build deps):
+   ```bash
+   pip install --no-build-isolation -e ../dwellir-harvester-lib
+   ```
+3. Install this app in editable mode without pulling extra deps (already satisfied by the lib/env):
+   ```bash
+   pip install --no-build-isolation --no-deps -e .
+   ```
+4. Run the test bench:
+   ```bash
+   python -m pytest
+   ```
+If `setuptools` is missing in the venv, recreate it with `--system-site-packages` as above. If your lib lives elsewhere, adjust the path in step 2 or edit `pyproject.toml` accordingly.
+
 ### Adding a New Collector
 
-1. Create a new Python file in `src/dwellir_harvester/collectors/`
-2. Implement a class using the Dummycollector `BlockchainCollector` or Nullcollector `GenericCollector`
-3. Add it to `__all__` in `collectors/__init__.py`
+Collectors now live in the library repo. Add your collector to `../dwellir-harvester-lib/src/dwellir_harvester/collectors/`, implement it with `BlockchainCollector` or `GenericCollector`, and export it via `__all__` in that package (or ship it as a plugin via entry points/`--collector-path`).
 
 ## License
 
