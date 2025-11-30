@@ -2,11 +2,13 @@ import argparse
 import json
 import logging
 import os
-import sys
 import shlex
+import sys
 from datetime import datetime, timezone
 from pathlib import Path
-from typing import List, Optional, Dict, Any
+from typing import List, Optional
+
+from dwellir_harvester.core import bundled_schema_path, collect_all, load_collectors, run_collector
 
 def setup_logging(debug=False):
     """Configure logging with the specified debug level."""
@@ -39,15 +41,6 @@ def setup_logging(debug=False):
     log.setLevel(log_level)
     
     return log
-
-# Add the parent directory to the Python path if running directly
-if __name__ == "__main__" and __package__ is None:
-    import os
-    import sys
-    sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
-    from dwellir_harvester.core import collect_all, bundled_schema_path, load_collectors, run_collector
-else:
-    from .core import collect_all, bundled_schema_path, load_collectors, run_collector
 
 def build_parser() -> argparse.ArgumentParser:
     """Build the command line argument parser."""
@@ -91,6 +84,13 @@ def build_parser() -> argparse.ArgumentParser:
         action="store_true",
         help="Enable debug output with detailed error information."
     )
+    collect_parser.add_argument(
+        "--collector-path",
+        action="append",
+        dest="collector_paths",
+        default=[],
+        help="Additional paths to search for collectors (can be repeated). Also honors HARVESTER_COLLECTOR_PATHS."
+    )
     
     return parser
 
@@ -124,7 +124,7 @@ def main(args: Optional[List[str]] = None) -> int:
             log.debug("Loading all available collectors...")
             
             # Load all available collectors
-            all_collectors = load_collectors()
+            all_collectors = load_collectors(plugin_paths=parsed_args.collector_paths)
             
             log.debug(f"Found {len(all_collectors)} total collectors")
             log.debug(f"Requested collectors: {parsed_args.collectors}")
@@ -151,7 +151,8 @@ def main(args: Optional[List[str]] = None) -> int:
                 [c.NAME for c in collectors],
                 schema_path=schema_path,
                 validate=getattr(parsed_args, 'validate', True),  # Use getattr for backward compatibility
-                debug=parsed_args.debug
+                debug=parsed_args.debug,
+                plugin_paths=parsed_args.collector_paths
             )
             
             # Output the result

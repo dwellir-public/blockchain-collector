@@ -60,6 +60,7 @@ class CollectorDaemon:
         self.httpd: Optional[HTTPServer] = None
         self.output_file = config.get('output_file', '/var/lib/dwellir-harvester/harvested-data.json')
         self.auth_tokens = self._load_auth_tokens(config)
+        self.collector_paths = config.get('collector_paths', [])
         
         # Ensure output directory exists
         if self.output_file:
@@ -189,7 +190,8 @@ class CollectorDaemon:
                 collector_names=self.config['collectors'],
                 schema_path=schema_path,
                 validate=self.config.get('validate', True),
-                debug=debug
+                debug=debug,
+                plugin_paths=self.collector_paths
             )
 
             # Update the latest results
@@ -363,6 +365,13 @@ def parse_args():
     parser = argparse.ArgumentParser(description='Dwellir Harvester Daemon')
     parser.add_argument('--collectors', nargs='+', default=['host'],
                       help='List of collectors to run (default: host)')
+    parser.add_argument(
+        '--collector-path',
+        action='append',
+        dest='collector_paths',
+        default=[],
+        help='Additional paths to search for collectors (can be repeated). Also honors HARVESTER_COLLECTOR_PATHS.'
+    )
     parser.add_argument('--host', default='0.0.0.0',
                       help='Host to bind the HTTP server to (default: 0.0.0.0)')
     parser.add_argument('--port', type=int, default=18080,
@@ -405,6 +414,7 @@ def main():
     # Create and start the daemon
     daemon = CollectorDaemon({
         'collectors': args.collectors,
+        'collector_paths': args.collector_paths,
         'host': args.host,
         'port': args.port,
         'interval': args.interval,
